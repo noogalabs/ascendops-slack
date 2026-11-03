@@ -46,6 +46,7 @@ for profile in ("department", "dm-only"):
         require({"app_mentions:read", "channels:history", "groups:history", "files:read"} <= scopes, f"{relative}: incomplete department permissions")
 
 routing = read_json("templates/slack.example.json")
+require(routing.get("channel_mentions_only") is True, "slack.example.json: channel_mentions_only must be explicitly true for the guide's channel policy")
 for key in ("allowed_channels", "allowed_users"):
     values = routing.get(key)
     require(isinstance(values, list) and bool(values), f"slack.example.json: {key} must be explicit and nonempty")
@@ -73,11 +74,14 @@ for path in sorted(ROOT.rglob("*.md")):
 
 env_path = ROOT / "templates/agent.env.example"
 if env_path.exists():
+    env_keys = set()
     for line in env_path.read_text().splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         key, separator, value = line.partition("=")
+        env_keys.add(key)
         require(bool(separator) and re.fullmatch(r"REPLACE_WITH_[A-Z0-9_]+", value) is not None, f"agent.env.example: {key} must have a REPLACE_WITH placeholder value")
+    require({"SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"} <= env_keys, "agent.env.example: both per-agent bot and app token placeholders are required")
 else:
     errors.append("Missing templates/agent.env.example")
 

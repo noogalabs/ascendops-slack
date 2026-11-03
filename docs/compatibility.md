@@ -1,55 +1,47 @@
 # Check your runtime first
 
-The Slack app and Fleet runtime must both support the behavior you want. This kit supplies configuration templates and operating rules. It does not add missing event handlers, threading, file downloads, or scheduler jobs to your installation.
+The routed workflow in this kit requires the implementation in [runtime commit `b016f1f`](https://github.com/noogalabs/ascendops/tree/b016f1fa6544609872674fced9c40a6d9440f841), submitted in [runtime PR #77](https://github.com/noogalabs/ascendops/pull/77). Confirm that your installed build contains these changes; a link to source does not upgrade a running installation.
 
-Record your installed Fleet revision, Node version, agent directory, current communication settings, and available send tools. Compare them with the requirements below before creating apps or changing access.
+This repository supplies setup documents and templates. It does not install the runtime, create Slack apps, load credentials, or verify live delivery. Record your installed revision, Node version, active instance, agent IDs, and restart procedure before following [setup](setup.md).
 
-## Public runtime reference
+## Required behavior and acceptance checks
 
-The public [AscendOps source](https://github.com/noogalabs/ascendops/tree/95baa58d5b0755b1add8f536ec57070b04d1eae8) was reviewed on November 3, 2026 at commit `95baa58d5b0755b1add8f536ec57070b04d1eae8`. These findings describe that snapshot, not every Fleet installation or future release. Your installed build and its loaded configuration remain the source of truth for your setup.
-
-| Requirement | Reviewed public source | What to do before relying on it |
+| Requirement | Runtime behavior | Check in your installation |
 |---|---|---|
-| Separate Slack apps | Configurable per agent; duplicate app-token ownership only warns. | Give each agent a different app and credentials. Check the identity of actual replies. |
-| Sender and conversation routing | A valid `slack.json` gates both `allowed_channels` and `allowed_users`. | Use explicit allowlists, validate the JSON, and verify permitted and denied routes. |
-| Missing or malformed routing | Falls back to the legacy single-conversation binding. | Do not interpret a broken or missing file as denial. Confirm the running configuration loaded. |
-| Listener startup | Requires `config.json` → `slack_watch.channel`. Tokens, `SLACK_CHANNEL`, and `slack.json` alone do not start inbound delivery. | Merge the startup fragment into the existing agent configuration and verify the listener starts. |
-| Socket Mode | Uses native `WebSocket`, documented for Node 22+. Node 20/21 use single-conversation polling fallback. | Check the runtime actually has native WebSocket support. Polling a primary conversation does not verify all listed conversations. |
-| Private DMs | Routing accepts a listed `D...` conversation ID. | Verify DM-only startup and real inbound/outbound delivery for this app/person pair. |
-| Additional sender trust | `trusted_slack_users` uses Slack **handles**, separately from routing IDs. The lookup calls `users.info` and requires `users:read`. An empty or omitted list is open at this later gate. | Keep `users:read` in the DM profile and an explicit handle list as well as the routing allowlist. Test the installed identity resolution. |
-| Channel mentions | The Socket Mode filter accepts message events; it does not handle `app_mention`. No technical mention-only gate was found. | Add supported mention handling before claiming that profile works. A behavior instruction can limit replies but does not prevent model delivery. |
-| Issue threads | The inbound listener omits the parent `thread_ts` from the agent inbox. Normal `send-slack` and `SlackAPI.postMessage` do not expose a thread argument. | Complete and verify the inbound-to-outbound thread path. A separate thread helper exists but is not the ordinary reply path. |
-| Incoming files | File events may be delivered, but the reviewed listener renders text and has no file downloader. | Enable file permissions only for a runtime with verified authenticated downloading and explicit failure reporting. |
-| Duplicate events | Per-agent deduplication windows and reservations exist. | Verify one answer for overlapping mention/message delivery in your installation. |
-| Restart persistence | Credentials and routing load at startup. | Use your normal restart procedure and retest. Do not assume hot reload. |
-| Scheduled briefings | Require scheduler jobs and a supported send path. | Observe a normal scheduled run; app subscriptions do not create reports. |
+| Separate app per agent | A second Socket Mode listener cannot claim an app token already held by another agent in the same daemon. | Give each agent its own app and complete credential pair. Confirm actual reply identities. Coordinate ownership across separate daemon instances yourself. |
+| Native WebSocket | Routed mode requires an app token and native WebSocket support, normally Node.js 22 or later. It refuses a partial single-conversation polling downgrade. | Check the installed Node process and observe a working Socket Mode connection. Legacy polling does not satisfy this guide. |
+| Complete credentials | A present routed-agent `.env` must contain its own nonblank bot/app pair. Missing keys or unreadable files do not borrow ambient credentials. | Use one app's pair in the approved secret store. A genuinely absent per-agent file may use a complete approved process-environment pair. |
+| DM-only startup | Primary conversation precedence is `slack_watch.channel`, then `SLACK_CHANNEL`, then the first allowed routing conversation. | Use the actual app/person DM ID. An explicit primary must be allowed; no unrelated public channel is needed. |
+| Sender and conversation restrictions | `allowed_channels` and workspace/member `allowed_users` must both pass. Empty or omitted allowlists deny input. | Test one permitted route and controlled denied sender/conversation routes. |
+| Invalid routing | An existing malformed or unreadable `slack.json` refuses Slack startup and routed CLI sends. It does not become legacy mode. | Validate the file before restart and confirm the loaded policy. No file at all retains the separate legacy binding. |
+| Additional sender trust | `trusted_slack_users` checks Slack handles after routing. Identity lookup needs `users:read`; an empty handle list is open at this additional gate. | Keep an explicit handle list and the scope, alongside the workspace/member allowlist. |
+| Channel mentions | `app_mention` is handled. Routed non-DM input requires a mention by default; direct DMs do not. | Verify an actual mention reaches the model and ordinary channel input is filtered. Document any deliberate monitoring opt-out. |
+| Issue threads | Inbox messages preserve the reply parent; `send-slack --thread-ts` sends to it. JSON send receipts expose the new message timestamp. | Observe both a threaded reply and a new proactive case, saving the returned parent timestamp. |
+| Incoming files | Downloads run after access/mention checks, with private generated paths and bounded requests. | Test actual content with `files:read`, plus accurate failure reporting. Caption-only delivery is insufficient. |
+| Restart and reports | Configuration loads at startup. Reports need actual scheduler jobs. | Restart the pilot and retest; observe a normal scheduled run before promising reports. |
 
-**This snapshot cannot reproduce the complete guide without runtime work.** A basic text-DM experiment can establish partial connectivity. The finished arrangement also requires correct issue threads, intended channel behavior, enforced access, and every other capability you select in the [verification checklist](verification.md).
+An existing fleet sharing app tokens needs a migration to separate apps before enabling this workflow. Only the first same-daemon listener can claim a shared token; weakening that check would reintroduce split delivery.
 
 ## Configuration layers
 
-The examples describe the reviewed runtime. Check your version's schema before using them. Keep real configuration in your private installation.
+1. [agent.env.example](../templates/agent.env.example): the agent's own bot/app token pair, stored privately.
+2. [agent.config.fragment.json](../templates/agent.config.fragment.json): merge the applicable keys into existing `config.json`. Its watch conversation is an optional explicit primary; a route-only DM can use the first allowed conversation. Keep the trusted-handle list explicit.
+3. [slack.example.json](../templates/slack.example.json): approved conversation IDs, workspace/member identities, and `channel_mentions_only`, saved as the installed agent's `slack.json`.
+4. [Agent rules](agent-rules.md): case records, privacy, channel behavior, and business approvals. These complement runtime checks.
 
-1. [agent.env.example](../templates/agent.env.example): each agent's bot and app-level tokens, stored through your approved secret procedure.
-2. [agent.config.fragment.json](../templates/agent.config.fragment.json): the startup conversation and explicit Slack handles. **Merge these keys into the existing `config.json`; do not replace the whole file.**
-3. [slack.example.json](../templates/slack.example.json): conversation IDs and sender IDs, saved as the installed runtime's per-agent `slack.json`.
-4. [Agent rules](agent-rules.md): behavior, case-thread records, and business authority. These complement runtime enforcement.
+`allowed_users` values use `<WORKSPACE_ID>:<MEMBER_ID>`. `trusted_slack_users` uses handles. The two representations serve different checks. Keep each person's app DM and case-thread records separate; routing does not automatically isolate shared model memory.
 
-The primary `slack_watch.channel` conversation must also be in `allowed_channels`. For a DM-only setup, use the actual app/person DM ID only when your runtime supports it; verify startup rather than creating an extra public channel to satisfy a setting.
+`channel_mentions_only` defaults to `true` and applies to every allowed non-DM conversation for this agent. It also filters out unmentioned urgent posts. Set it to `false` only for a deliberately approved monitoring workflow, with narrow conversation access and durable quiet-channel/emergency rules. It is not a per-channel switch.
 
-`allowed_users` entries use `<WORKSPACE_ID>:<MEMBER_ID>`. `trusted_slack_users` entries use the corresponding Slack handle. They are different fields for different checks; do not copy one representation into the other.
+## Limits that still apply
 
-The reviewed routing schema supports optional `display_name`, `icon_emoji`, and `icon_url`, plus the two string-array allowlists. A valid empty allowlist denies routing; malformed JSON or a malformed schema can trigger the legacy fallback instead. Avoid unverified identity overrides and keep required lists explicit.
+- Thread placement does not load previous Slack history into the model. Use a current case summary or supported authorized retrieval.
+- Incoming downloads allow four files per message, 10 MiB each, 20 MiB total, and approved HTTPS `files.slack.com` URLs only. Successful files remain in private state storage; the installation owns retention and cleanup. Outgoing uploads are separate.
+- Socket envelopes are acknowledged before identity lookup, downloads, and durable inbox completion. A later failure or process crash can lose a message without Slack replay. Deduplication is bounded and in memory; it does not guarantee crash recovery or exactly-once actions.
+- Template validation and automated runtime tests do not establish that your Slack app, scopes, routing, approvals, or scheduled deliveries work live. Use [verification](verification.md).
 
-## Source references
+## Source reference
 
-- [Runtime setup runbook](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/docs/architecture/slack-adapter-setup.md)
-- [Routing schema and validation](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/slack/slack-routing.ts)
-- [Agent startup](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/daemon/agent-manager.ts)
-- [Socket/polling selection](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/daemon/slack-inbound-mode.ts)
-- [Socket event filtering](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/slack/slack-socket.ts)
-- [Inbound inbox rendering](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/daemon/slack-socket-listener.ts)
-- [Outbound bus commands](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/cli/bus.ts)
-- [Slack handle trust resolution](https://github.com/noogalabs/ascendops/blob/95baa58d5b0755b1add8f536ec57070b04d1eae8/src/slack/slack-identity.ts)
+The pinned [runtime runbook](https://github.com/noogalabs/ascendops/blob/b016f1fa6544609872674fced9c40a6d9440f841/docs/architecture/slack-adapter-setup.md) describes the implementation. Relevant code: [startup](https://github.com/noogalabs/ascendops/blob/b016f1fa6544609872674fced9c40a6d9440f841/src/daemon/slack-startup.ts), [routing](https://github.com/noogalabs/ascendops/blob/b016f1fa6544609872674fced9c40a6d9440f841/src/slack/slack-routing.ts), [inbound delivery](https://github.com/noogalabs/ascendops/blob/b016f1fa6544609872674fced9c40a6d9440f841/src/daemon/slack-socket-listener.ts), [file downloads](https://github.com/noogalabs/ascendops/blob/b016f1fa6544609872674fced9c40a6d9440f841/src/slack/slack-files.ts), and [CLI sends](https://github.com/noogalabs/ascendops/blob/b016f1fa6544609872674fced9c40a6d9440f841/src/cli/bus.ts).
 
 Return to the [README](../README.md) or continue with [setup](setup.md).
