@@ -2,54 +2,50 @@
 
 [Repository overview](../README.md) · [Setup guide](setup.md) · [Runtime compatibility](compatibility.md) · [Agent rules](agent-rules.md)
 
-Begin with one agent, one authorized person, and a private DM. Use harmless test content and the installed runtime's supported tools. Coordinate any negative-access tests with the administrator and test participants; use no sensitive information.
+Begin with one agent, one authorized person, and a private DM. Confirm the installed build contains the [runtime implementation](https://github.com/noogalabs/ascendops/tree/b016f1fa6544609872674fced9c40a6d9440f841) from [PR #77](https://github.com/noogalabs/ascendops/pull/77), then perform these checks with harmless content. Coordinate negative-access tests with the administrator and participants.
 
-Read [compatibility](compatibility.md) first. The reviewed public runtime does not provide the intended thread workflow, `app_mention` handler, or attachment downloader. Mark those capabilities **unsupported** unless your installed version or a separately implemented adapter closes the gaps and passes the checks below.
-
-Record the Fleet version, app/agent mapping, test date, and who performed the checks in your own private setup record. Keep tokens and private conversation content out of the public repository. A connected indicator or a successful outbound send proves only that particular step.
+Keep the installed revision, Node version, app/agent mapping, test date, and observations in a private setup record. Templates and automated tests do not verify your live Slack installation. Keep tokens, private conversations, and member records out of the public repository.
 
 ## Private-DM pilot
 
-- [ ] This agent has its own app credentials, and only its intended listener uses them.
-- [ ] The required primary watch conversation and explicit trusted-handle list are configured for the installed runtime. The primary conversation is also permitted by routing; its startup does not depend on an unrelated shared channel.
-- [ ] Socket Mode or the documented polling path actually covers every conversation you intend to support. A single-primary-conversation polling fallback does not verify additional DMs or channels.
-- [ ] An authorized plain DM receives a reply from the intended bot in that same DM, without an @mention.
-- [ ] A follow-up stays under the correct parent message. A separate issue uses its own parent.
-- [ ] A controlled unauthorized-sender test is denied; an unapproved conversation is also denied. Observe the routing outcome rather than inferring denial from silence.
-- [ ] Routing validates before restart and the runtime confirms it loaded. Check the installed version's missing/malformed-file behavior instead of assuming a denial; the reviewed version can fall back to a legacy binding.
-- [ ] The existing action-approval path still applies in the DM. Do not perform a real consequential action just to test it.
-- [ ] Restarting only the intended agent preserves routing, durable rules, and correct case-thread replies.
+- [ ] The intended agent runs routed Socket Mode with native WebSocket support, normally Node.js 22 or later; its actual reply has the correct app identity.
+- [ ] The app has its own complete credentials. A present per-agent secret file does not borrow missing/blank keys from ambient credentials.
+- [ ] The selected primary is the actual app/person DM ID and is allowed by routing. No unrelated channel is required. Keep the separate trusted-handle list explicit.
+- [ ] Routing validates and loads. Controlled invalid/unreadable policy fixtures refuse legacy fallback; permitted and denied sender/conversation routes behave as intended.
+- [ ] A plain authorized DM gets a reply without a mention; a follow-up stays under its correct parent.
+- [ ] A new proactive case produces a JSON send receipt. Its returned `ts`, conversation, person, and case ID are saved and reused for a later `--thread-ts` reply.
+- [ ] Existing action-approval controls still apply. Use a harmless proposal rather than performing a consequential action just to test them.
+- [ ] A normal restart preserves routing, durable instructions, and correct case-thread destinations. This does not prove replay of messages lost during a crash.
 
-If the runtime cannot support the pilot's DM, restrictions, or thread workflow, record the limitation and resolve it before expanding.
+Resolve a failed required path before expanding.
 
 ## Expansion checks
 
-- [ ] A real channel @mention receives one threaded status answer; mentioning another agent produces no response from this one.
-- [ ] Ordinary channel chat produces no unsolicited reply. Separately record whether a runtime filter blocks that input or the agent merely follows a behavior rule.
-- [ ] A channel action request is redirected to the proper private DM and approval path.
-- [ ] A second authorized person's DM works independently. Replies, thread records, and private context remain with the correct person.
-- [ ] Duplicate delivery or overlapping subscriptions produce one reply/action in a controlled test.
-- [ ] If attachments are promised, a small supported file is actually downloaded and understood; a failed download is reported accurately.
-- [ ] If reports are promised, a normal scheduled run appears once in the intended channel at the agreed time and timezone.
+- [ ] A real channel mention gets one threaded status answer; mentioning another agent does not invoke this one.
+- [ ] Default mention-only filtering keeps ordinary channel input away from the model. If monitoring needs an explicit opt-out, record its agent-wide scope and test the approved quiet-channel/emergency behavior, including unmentioned urgent posts.
+- [ ] Channel action requests are redirected to private case threads and the normal approval path.
+- [ ] A second person's DM, replies, and case records stay separate from the first person's. Do not infer shared-memory isolation from Slack conversation separation.
+- [ ] Controlled overlapping events/retries produce one reply within the listener's deduplication window. Do not claim exactly-once behavior across restarts.
+- [ ] A small supported attachment is actually downloaded; a denied or oversized file produces an accurate error. Confirm the private retention/cleanup policy.
+- [ ] A normal scheduled briefing arrives once at the agreed time, timezone, and audience.
 
-## Keep configuration separate from observation
+## Record configuration separately from observation
 
-Fill this table in your private setup record. Use **yes**, **no**, **unsupported**, or **not tested**; include a short nonsecret observation or test reference. “Configured” alone is not a pass.
+Use **yes**, **no**, **unsupported**, or **not tested**, with a short nonsecret observation or test reference. “Configured” alone is not a pass.
 
 | Capability | Configured? | Actually observed? | Evidence or remaining gap |
 |---|---|---|---|
-| Separate app and intended listener | | | |
+| Separate app, credentials, and native Socket Mode | | | |
 | Plain authorized DM | | | |
 | Conversation and sender restrictions | | | |
-| Correct case-thread replies | | | |
+| Correct thread replies and saved proactive parent receipt | | | |
 | Existing approval controls | | | |
-| Persistence after restart | | | |
-| Channel mention response | | | |
-| Quiet ordinary channel behavior | | | |
-| Technical filtering of unmentioned channel input | | | |
+| Configuration and case records after restart | | | |
+| Channel mention response and technical input filtering | | | |
+| Approved monitoring opt-out, if selected | | | |
 | Separate second-person DM and context | | | |
-| Duplicate-event handling | | | |
-| Attachment content download | | | |
+| Bounded duplicate-event handling | | | |
+| File content download and retention policy | | | |
 | Normal scheduled delivery | | | |
 
-Summarize the result as: **configured**, **observed working**, **unsupported**, and **still untested**. Name the audience and capabilities actually tested. Expand from the verified pilot rather than declaring every agent ready from one successful connection.
+Name the audiences and capabilities actually tested. The transport acknowledges before durable inbox completion and has no guaranteed crash replay; reconcile unresolved cases with business records. Expand from the verified pilot instead of declaring every agent ready from one connection.

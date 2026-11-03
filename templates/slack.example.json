@@ -1,5 +1,6 @@
 {
   "display_name": "<AGENT_ID>",
+  "channel_mentions_only": true,
   "allowed_channels": [
     "<AUTHORIZED_PERSON_DM_ID>"
   ],
