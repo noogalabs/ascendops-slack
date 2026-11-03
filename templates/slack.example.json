@@ -1,0 +1,9 @@
+{
+  "display_name": "<AGENT_ID>",
+  "allowed_channels": [
+    "<AUTHORIZED_PERSON_DM_ID>"
+  ],
+  "allowed_users": [
+    "<WORKSPACE_ID>:<AUTHORIZED_MEMBER_ID>"
+  ]
+}

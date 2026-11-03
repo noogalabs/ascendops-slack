@@ -1,0 +1,13 @@
+# Keep installation-specific material outside the public setup kit.
+.env
+.env.*
+!*.env.example
+*.secret
+*.secrets
+slack.json
+*.local.json
+local/
+verification-results*
+.DS_Store
+__pycache__/
+*.pyc

@@ -1,0 +1,9 @@
+{
+  "slack_watch": {
+    "channel": "<PRIMARY_CONVERSATION_ID>",
+    "interval_ms": 60000
+  },
+  "trusted_slack_users": [
+    "<AUTHORIZED_SLACK_HANDLE>"
+  ]
+}
